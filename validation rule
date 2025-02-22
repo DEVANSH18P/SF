@@ -1,0 +1,98 @@
+1. Prevent Duplicate Account Name
+Scenario: Prevent users from creating an Account with the name "Test Account".
+
+OR( 
+    Name = "Test Account", 
+    Name = "Sample Account"
+)
+
+2. Ensure Opportunity Close Date is in the Future
+Scenario: Users must set the Close Date in the future.
+CloseDate < TODAY()
+
+Prevent Editing a Closed Opportunity
+Scenario: Prevent users from editing an Opportunity once it is Closed Won or Closed Lost.
+AND(
+    ISCHANGED(StageName), 
+    OR(
+        ISPICKVAL(StageName, "Closed Won"), 
+        ISPICKVAL(StageName, "Closed Lost")
+    )
+)
+4. Phone Number Must Be 10 Digits
+Scenario: Ensure users enter a 10-digit phone number in the Phone field of Contacts.
+NOT(
+    REGEX(Phone, "^[0-9]{10}$")
+)
+. Ensure Email Field Has a Valid Format
+Scenario: Prevent invalid email addresses from being entered in the Email field.
+
+NOT(
+    REGEX(Email, "^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$")
+)
+
+6. Ensure Discount is Less Than 20% for Standard Users
+Scenario: Allow only System Administrators to set a discount higher than 20%.
+AND(
+    Discount__c > 0.2, 
+    $Profile.Name <> "System Administrator"
+)
+7. Prevent Closing Case Without Resolution
+Scenario: Users cannot close a Case unless the Resolution Description is filled.
+
+AND(
+    ISPICKVAL(Status, "Closed"), 
+    ISBLANK(Resolution_Description__c)
+)
+8. Ensure Start Date is Before End Date
+Scenario: In a custom object Project__c, ensure Start_Date__c is before End_Date__c.
+
+
+ Start_Date__c > End_Date__c
+ 
+9. Restrict Editing Records After Approval
+Scenario: Prevent users from editing a record after it is approved.
+
+ 
+ AND(
+    ISCHANGED(Status__c), 
+    ISPICKVAL(Status__c, "Approved")
+)
+ 
+10. Ensure Custom Field Contains Only Numbers
+Scenario: A custom field Customer_ID__c must contain only numbers.
+
+NOT(REGEX(Customer_ID__c, "^[0-9]+$"))
+ 
+11. Ensure a Field is Required Only When a Certain Picklist Value is Selected
+Scenario: If Opportunity Type is New Business, Lead Source must be filled.
+
+ AND(
+    ISPICKVAL(Opportunity_Type__c, "New Business"), 
+    ISBLANK(LeadSource)
+)
+ 
+12. Prevent Users from Editing a Field After Creation
+Scenario: Prevent editing Order_Amount__c after the record is created.
+
+ 
+ AND(
+    ISCHANGED(Order_Amount__c), 
+    NOT(ISNEW())
+)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
