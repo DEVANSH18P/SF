@@ -1,0 +1,180 @@
+# Before Insert - Validate Data Before Insert
+Scenario: Prevent inserting an Account if the name is "Test Account".
+
+ trigger AccountValidation on Account (before insert) {
+    for (Account acc : Trigger.new) {
+        if (acc.Name == 'Test Account') {
+            acc.addError('You cannot use "Test Account" as the Account Name.');
+        }
+    }
+}
+
+2. Before Update - Ensure Consistency
+Scenario: Prevent changes to the Account Number field once it is set.
+
+ trigger AccountNumberLock on Account (before update) {
+    for (Account acc : Trigger.new) {
+        Account oldAcc = Trigger.oldMap.get(acc.Id);
+        if (oldAcc.AccountNumber != null && acc.AccountNumber != oldAcc.AccountNumber) {
+            acc.addError('Account Number cannot be changed once set.');
+        }
+    }
+}
+3. After Insert - Auto-create Related Records
+Scenario: Create a default Contact when a new Account is inserted.
+
+trigger CreateDefaultContact on Account (after insert) {
+    List<Contact> contacts = new List<Contact>();
+
+    for (Account acc : Trigger.new) {
+        contacts.add(new Contact(
+            LastName = 'Default Contact',
+            AccountId = acc.Id
+        ));
+    }
+    
+    insert contacts;
+}
+4. After Update - Sync Related Records
+Scenario: When an Account’s Billing Address changes, update all related Contacts' Mailing Address.
+
+trigger UpdateContactAddress on Account (after update) {
+    List<Contact> contactsToUpdate = new List<Contact>();
+
+    for (Account acc : Trigger.new) {
+        Account oldAcc = Trigger.oldMap.get(acc.Id);
+
+        if (oldAcc.BillingStreet != acc.BillingStreet ||
+            oldAcc.BillingCity != acc.BillingCity ||
+            oldAcc.BillingState != acc.BillingState) {
+
+            for (Contact con : [SELECT Id FROM Contact WHERE AccountId = :acc.Id]) {
+                con.MailingStreet = acc.BillingStreet;
+                con.MailingCity = acc.BillingCity;
+                con.MailingState = acc.BillingState;
+                contactsToUpdate.add(con);
+            }
+        }
+    }
+
+    if (!contactsToUpdate.isEmpty()) {
+        update contactsToUpdate;
+    }
+}
+5. Before Delete - Prevent Deletion
+Scenario: Prevent deleting an Account if it has associated Opportunities.
+
+trigger PreventAccountDeletion on Account (before delete) {
+    for (Account acc : Trigger.old) {
+        Integer oppCount = [SELECT COUNT() FROM Opportunity WHERE AccountId = :acc.Id];
+        if (oppCount > 0) {
+            acc.addError('Cannot delete an Account with active Opportunities.');
+        }
+    }
+}
+6. After Delete - Cleanup Related Records
+Scenario: Delete all Contacts when an Account is deleted.
+
+trigger CleanupContacts on Account (after delete) {
+    List<Contact> contactsToDelete = new List<Contact>();
+
+    for (Account acc : Trigger.old) {
+        contactsToDelete.addAll([SELECT Id FROM Contact WHERE AccountId = :acc.Id]);
+    }
+
+    if (!contactsToDelete.isEmpty()) {
+        delete contactsToDelete;
+    }
+}
+7. Bulk Processing - Efficient Handling
+Scenario: Bulk insert related cases for Accounts.
+
+trigger BulkCaseCreation on Account (after insert) {
+    List<Case> caseList = new List<Case>();
+
+    for (Account acc : Trigger.new) {
+        caseList.add(new Case(
+            AccountId = acc.Id,
+            Subject = 'New Account Case',
+            Status = 'Open'
+        ));
+    }
+
+    if (!caseList.isEmpty()) {
+        insert caseList;
+    }
+}
+8. Recursive Trigger Prevention
+Scenario: Prevent an infinite loop by using a static variable.
+
+public class TriggerHandler {
+    public static Boolean isTriggerExecuted = false;
+}
+
+trigger PreventRecursion on Account (after insert) {
+    if (TriggerHandler.isTriggerExecuted) return;
+    
+    TriggerHandler.isTriggerExecuted = true;
+
+    List<Contact> contacts = new List<Contact>();
+    for (Account acc : Trigger.new) {
+        contacts.add(new Contact(LastName = 'Default', AccountId = acc.Id));
+    }
+
+    insert contacts;
+}
+9. Trigger for Custom Object
+Scenario: Auto-update a custom field Total_Contacts__c on Account when Contacts are inserted or deleted.
+
+trigger UpdateContactCount on Contact (after insert, after delete) {
+    Set<Id> accountIds = new Set<Id>();
+
+    if (Trigger.isInsert || Trigger.isDelete) {
+        for (Contact con : Trigger.new) {
+            accountIds.add(con.AccountId);
+        }
+    }
+
+    List<Account> accountsToUpdate = new List<Account>();
+    for (Account acc : [SELECT Id, (SELECT Id FROM Contacts) FROM Account WHERE Id IN :accountIds]) {
+        acc.Total_Contacts__c = acc.Contacts.size();
+        accountsToUpdate.add(acc);
+    }
+
+    if (!accountsToUpdate.isEmpty()) {
+        update accountsToUpdate;
+    }
+}
+10. Trigger Framework - Best Practice
+For scalable triggers, use a Trigger Framework like this:
+
+
+trigger AccountTrigger on Account (before insert, after insert, before update, after update) {
+    if (Trigger.isBefore && Trigger.isInsert) {
+        AccountHandler.beforeInsert(Trigger.new);
+    }
+    if (Trigger.isAfter && Trigger.isInsert) {
+        AccountHandler.afterInsert(Trigger.new);
+    }
+}
+
+
+Handler Class:
+
+public class AccountHandler {
+    public static void beforeInsert(List<Account> accList) {
+        for (Account acc : accList) {
+            if (acc.Name == 'Test') {
+                acc.addError('Invalid Account Name.');
+            }
+        }
+    }
+
+    public static void afterInsert(List<Account> accList) {
+        List<Contact> contacts = new List<Contact>();
+        for (Account acc : accList) {
+            contacts.add(new Contact(LastName = 'Default', AccountId = acc.Id));
+        }
+        insert contacts;
+    }
+}
